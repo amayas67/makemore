@@ -19,16 +19,52 @@ print(f"Longest name: {longest_name}")
 print(f"Minimum length: {min(len(word) for word in words)}")
 print(f"Maximum length: {max(len(word) for word in words)}")
 
-def get_bigrams(words):
-    bigrams = {}
+
+import torch
+
+chars = sorted(list(set(''.join(words))))  # Unique characters
+stoi = {ch: i for i, ch in enumerate(chars)}  # Char to index
+# print(f"Unique characters: {chars}")
+# print(f"Character to index mapping: {stoi}")
+stoi['<S>'] = len(stoi)  # Start token
+stoi['<E>'] = len(stoi)  # End token
+
+N = torch.zeros((len(stoi), len(stoi)), dtype=torch.int32)  # Bigram count matrix
+# print(f"Updated character to index mapping: {stoi}")
+
+def build_bigram_matrix(words):
     for word in words:
         # Add start and end tokens
         chars = ['<S>'] + list(word) + ['<E>']
         for ch1, ch2 in zip(chars, chars[1:]):
-            bigram = (ch1, ch2)
-            bigrams[bigram] = bigrams.get(bigram, 0) + 1
-    return bigrams
+            ix1 = stoi[ch1]
+            ix2 = stoi[ch2]
+            N[ix1, ix2] += 1
 
-sorted_bigrams = sorted(get_bigrams(words).items(), key=lambda x: x[1], reverse=True)
+build_bigram_matrix(words)
 
-print(f"Most common bigrams: {sorted_bigrams[:10]}")
+itos = {i: ch for ch, i in stoi.items()}  # Index to char
+
+import matplotlib.pyplot as plt
+
+# Visualisation de la matrice de bigrammes N
+plt.figure(figsize=(20, 20))
+plt.imshow(N, cmap='Blues')
+
+# Ajouter les labels des caractères sur les axes
+chars_with_tokens = [itos[i] for i in range(len(stoi))]
+plt.xticks(ticks=range(len(stoi)), labels=chars_with_tokens, fontsize=10)
+plt.yticks(ticks=range(len(stoi)), labels=chars_with_tokens, fontsize=10)
+
+# Ajouter les valeurs dans chaque cellule
+for i in range(len(stoi)):
+    for j in range(len(stoi)):
+        if N[i, j] > 0:
+            plt.text(j, i, N[i, j].item(), ha='center', va='center', fontsize=8, color='black')
+
+plt.xlabel('Second character (j)')
+plt.ylabel('First character (i)')
+plt.title('Bigram Count Matrix N')
+plt.colorbar(label='Count')
+plt.tight_layout()
+plt.show()
