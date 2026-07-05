@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Makemore - Explained Simply</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:950px;margin:40px auto;line-height:1.8;background:#fafafa;padding:24px}
+h1{color:#174a7c}
+h2{color:#225c94}
+.section{background:white;border:1px solid #ddd;border-radius:8px;padding:18px;margin:18px 0}
+.question{font-weight:bold;color:#174a7c}
+.box{background:#eef7ff;border-left:5px solid #2b7bbb;padding:12px;margin-top:12px}
+@media (max-width: 768px) {
+    body { padding: 12px; margin: 10px auto; }
+}
+</style>
+</head>
+<body>
+
+<h1>Makemore - Intuitive Summary (Part 1)</h1>
+
+<div class="section">
+<p class="question">❓ What is our goal?</p>
+<p>We want to teach a program to invent names that look like the ones in the dataset.</p>
+</div>
+
+<div class="section">
+<p class="question">❓ What does the dataset contain?</p>
+<p>About 32,000 names. These serve as our examples.</p>
+</div>
+
+<div class="section">
+<p class="question">❓ Why create the N matrix?</p>
+<p>To count how many times each pair of letters (bigram) appears.</p>
+
+<p>For example:</p>
+
+<ul>
+<li>e → m</li>
+<li>m → a</li>
+<li>a → .</li>
+</ul>
+
+<p>The more often a pair appears, the higher its counter.</p>
+
+<div class="box">
+The N matrix does NOT contain probabilities.<br>
+It only contains counts.
+</div>
+</div>
+
+<div class="section">
+<p class="question">❓ What does the P matrix do next?</p>
+
+<p>We transform the counts into probabilities.</p>
+
+<p>After this step, each row answers the question:</p>
+
+<p><strong>"If I am on this letter, what is the probability of choosing each of the following letters?"</strong></p>
+</div>
+
+<div class="section">
+<p class="question">❓ Does the first model choose letters completely at random?</p>
+
+<p>No.</p>
+
+<p>The choice remains random, but it is guided by the dataset's probabilities.</p>
+
+<p>If "em" appears very often, the model will choose "m" after "e" much more often than "x".</p>
+</div>
+
+<div class="section">
+<p class="question">❓ So why are the generated names still bad?</p>
+
+<p>Because the model only looks at one letter at a time.</p>
+
+<p>It doesn't know the whole beginning of the name.</p>
+
+<p>It only knows:</p>
+
+<p><strong>"I am on the letter e. What is the next letter?"</strong></p>
+
+<p>This is too limited information.</p>
+</div>
+
+<div class="section">
+<p class="question">❓ How do we know if our model is good?</p>
+
+<p>We ask it:</p>
+
+<div class="box">
+"If you had to rewrite the entire dataset, letter by letter, how confident would you be?"
+</div>
+
+<p>To answer, it calculates the probability of each transition and then combines them all.</p>
+
+<p>Multiplying tens of thousands of small probabilities gives a result far too small to be represented by the computer (this is called numerical underflow). Logarithms turn this product into a sum, which stays numerically stable.</p>
+</div>
+
+<div class="section">
+<p class="question">❓ Why do we talk about Negative Log-Likelihood (NLL)?</p>
+
+<p>Because it is more convenient to minimize a number than to maximize a probability.</p>
+
+<div class="box">
+Low NLL = the model assigns a high probability to the dataset.<br><br>
+High NLL = the model assigns a low probability to the dataset.
+</div>
+</div>
+
+<div class="section">
+<p class="question">❓ What happens if a pair of letters never appears?</p>
+
+<p>The probability is 0. The log of 0 is mathematically defined, but it tends toward negative infinity — an unusable value for our calculation. So we add a "ghost" (+1) to every cell in the matrix to avoid ever hitting this case.</p>
+
+<div class="box">
+This is called <strong>Model Smoothing</strong>. It ensures the model never encounters a strictly zero probability.
+</div>
+</div>
+
+<div class="section">
+<p class="question">❓ What will the neural network do?</p>
+
+<p>We are not going to give it rules.</p>
+
+<p>We will only tell it:</p>
+
+<div class="box">
+"Try to rewrite the dataset, letter by letter, with as few errors as possible."
+</div>
+
+<p>With each error, its parameters will be slightly modified.</p>
+
+<p>Gradually, it will discover for itself which letter sequences are the most plausible.</p>
+</div>
+
+<div class="section">
+<p class="question">❓ Is the goal to memorize the dataset?</p>
+
+<p>No.</p>
+
+<p>The goal is to understand the regularities of the names.</p>
+
+<p>We hope that by learning to rewrite the dataset examples well, the model will also be able to invent new, credible names.</p>
+</div>
+
+</body>
+</html>
