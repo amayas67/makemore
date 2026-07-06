@@ -74,7 +74,7 @@ plt.yticks(range(len(stoi)), chars_with_tokens)
 # ------------------------------------------------------------------
 
 P = (N + 1).float()   # +1 smoothing
-P = P / P.sum(1, keepdim=True)
+P = P / P.sum(1, keepdim=True) 
 
 # ------------------------------------------------------------------
 # Generate names
@@ -135,3 +135,22 @@ average_nll = negative_log_likelihood / num_bigrams
 print(f"\nLog-Likelihood: {log_likelihood:.4f}")
 print(f"Negative Log-Likelihood: {negative_log_likelihood:.4f}")
 print(f"Average NLL: {average_nll:.4f}")
+
+#trainig set 
+xs, ys = [], []
+for word in words:
+    chars = ['.'] + list(word) + ['.']
+
+    for ch1, ch2 in zip(chars, chars[1:]):
+        ix1 = stoi[ch1]
+        ix2 = stoi[ch2]
+        xs.append(ix1)
+        ys.append(ix2)
+xs = torch.tensor(xs) # you can use capital T for Tensor, but lowercase t is more common because it gives you a tensor of the same type as the input.
+ys = torch.tensor(ys)
+
+import torch.nn.functional as F
+xenc = F.one_hot(xs, num_classes=len(stoi)).float() # one-hot encoding of the input characters
+W = torch.randn((len(stoi), len(stoi)), generator=g, requires_grad=True) # weight matrix for the linear layer
+logits = xenc @ W 
+counts = logits.exp() # convert logits to counts , we exponentiate the logits so they are positive and can be interpreted as counts
