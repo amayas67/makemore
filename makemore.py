@@ -35,7 +35,7 @@ print(stoi)
 print(itos)
 
 # ------------------------------------------------------------------
-# Bigram count matrix
+# Bigram count matrix (N) — the "counting" baseline model
 # ------------------------------------------------------------------
 
 N = torch.zeros((len(stoi), len(stoi)), dtype=torch.int32)
@@ -44,7 +44,6 @@ N = torch.zeros((len(stoi), len(stoi)), dtype=torch.int32)
 def build_bigram_matrix(words):
     for word in words:
         chars = ['.'] + list(word) + ['.']
-
         for ch1, ch2 in zip(chars, chars[1:]):
             ix1 = stoi[ch1]
             ix2 = stoi[ch2]
@@ -73,11 +72,11 @@ plt.yticks(range(len(stoi)), chars_with_tokens)
 # Convert counts to probabilities (WITH SMOOTHING)
 # ------------------------------------------------------------------
 
-P = (N + 1).float()   # +1 smoothing
-P = P / P.sum(1, keepdim=True) 
+P = (N + 1).float()   # +1 smoothing: guarantees no cell is ever exactly 0
+P = P / P.sum(1, keepdim=True)  # normalize row by row -> each row sums to 1
 
 # ------------------------------------------------------------------
-# Generate names
+# Generate names from the counting model (P)
 # ------------------------------------------------------------------
 
 g = torch.Generator().manual_seed(2147483647)
@@ -88,7 +87,7 @@ def generate_name():
     ix = 0
 
     while True:
-        p = P[ix]
+        p = P[ix]  # only the row for the current character - no cross-row competition
 
         ix = torch.multinomial(
             p,
@@ -105,13 +104,13 @@ def generate_name():
     return "".join(name)
 
 
-print("\nGenerated names:\n")
+print("\nGenerated names (counting model):\n")
 
 for _ in range(10):
     print(generate_name())
 
 # ------------------------------------------------------------------
-# Log-Likelihood
+# Log-Likelihood of the counting model (quality check for P)
 # ------------------------------------------------------------------
 
 log_likelihood = 0.0
@@ -136,7 +135,10 @@ print(f"\nLog-Likelihood: {log_likelihood:.4f}")
 print(f"Negative Log-Likelihood: {negative_log_likelihood:.4f}")
 print(f"Average NLL: {average_nll:.4f}")
 
-#trainig set 
+# ------------------------------------------------------------------
+# Build the training set (xs -> ys) for the neural network version
+# ------------------------------------------------------------------
+
 xs, ys = [], []
 for word in words:
     chars = ['.'] + list(word) + ['.']
@@ -146,11 +148,74 @@ for word in words:
         ix2 = stoi[ch2]
         xs.append(ix1)
         ys.append(ix2)
-xs = torch.tensor(xs) # you can use capital T for Tensor, but lowercase t is more common because it gives you a tensor of the same type as the input.
+
+# lowercase t (torch.tensor) infers dtype from the data, capital T (torch.Tensor)
+# always gives float32 - lowercase is the safer default here since xs/ys are indices
+xs = torch.tensor(xs)
 ys = torch.tensor(ys)
 
+# ------------------------------------------------------------------
+# Neural network setup — a single linear layer (27 -> 27)
+# ------------------------------------------------------------------
+
 import torch.nn.functional as F
-xenc = F.one_hot(xs, num_classes=len(stoi)).float() # one-hot encoding of the input characters
-W = torch.randn((len(stoi), len(stoi)), generator=g, requires_grad=True) # weight matrix for the linear layer
-logits = xenc @ W 
-counts = logits.exp() # convert logits to counts , we exponentiate the logits so they are positive and can be interpreted as counts
+
+xenc = F.one_hot(xs, num_classes=len(stoi)).float()  # one-hot encode every input character once
+W = torch.randn((len(stoi), len(stoi)), generator=g, requires_grad=True)  # trainable weight matrix
+
+# forward pass (before any training, just to see the starting loss)
+logits = xenc @ W                                  # log-counts
+counts = logits.exp()                              # counts, equivalent to N
+probs = counts / counts.sum(1, keepdim=True)        # probabilities, row-normalized (equivalent to P)
+
+loss = -probs[torch.arange(len(xs)), ys].log().mean()  # negative log-likelihood loss
+print(f"\nInitial loss (before training): {loss.item():.4f}")
+
+# ------------------------------------------------------------------
+# Training loop — gradient descent on W
+# ------------------------------------------------------------------
+
+for epoch in range(1000):
+    # forward pass
+    logits = xenc @ W
+    counts = logits.exp()
+    probs = counts / counts.sum(1, keepdim=True)
+    loss = -probs[torch.arange(len(xs)), ys].log().mean()
+
+    # backward pass
+    if W.grad is not None:
+        W.grad = None  # reset gradients to zero before backward pass
+    loss.backward()
+
+    # update
+    W.data += -10 * W.grad  # gradient descent, learning rate = 10
+
+print(f"Loss after training: {loss.item():.4f}")
+
+# ------------------------------------------------------------------
+# Generate names from the trained neural network
+# ------------------------------------------------------------------
+
+def generate_names_2():
+    name = []
+    ix = 0
+
+    while True:
+        xenc = F.one_hot(torch.tensor([ix]), num_classes=len(stoi)).float()  # shape (1, 27): only this ix's row
+        logits = xenc @ W
+        counts = logits.exp()
+        probs = counts / counts.sum(1, keepdim=True)
+
+        ix = torch.multinomial(probs, num_samples=1).item()
+
+        if ix == 0:
+            break
+
+        name.append(itos[ix])
+
+    return "".join(name)
+
+
+print("\nGenerated names after training:\n")
+for _ in range(10):
+    print(generate_names_2())
