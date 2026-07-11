@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Makemore Part 3 - Optimizing the MLP</title>
+
+<style>
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    max-width:1100px;
+    margin:auto;
+    padding:40px;
+    line-height:1.7;
+    background:#fafafa;
+    color:#222;
+}
+
+h1,h2{
+    color:#1f4e79;
+}
+
+code{
+    background:#efefef;
+    padding:2px 5px;
+    border-radius:4px;
+}
+
+pre{
+    background:#272822;
+    color:#f8f8f2;
+    padding:15px;
+    border-radius:8px;
+    overflow-x:auto;
+}
+
+.note{
+    background:#e8f4ff;
+    border-left:5px solid #3498db;
+    padding:15px;
+    margin:20px 0;
+}
+
+.warning{
+    background:#fff3cd;
+    border-left:5px solid #ff9800;
+    padding:15px;
+    margin:20px 0;
+}
+
+.math{
+    background:#f5f5f5;
+    padding:12px;
+    border-radius:8px;
+    font-family:monospace;
+}
+</style>
+
+</head>
+<body>
+
+<h1>Makemore Part 3 - First Optimizations</h1>
+
+<p>
+After building a basic MLP in Makemore Part 2, Karpathy begins to improve the
+training process.
+The architecture does not change yet.
+Instead, he focuses on making optimization easier.
+</p>
+
+<hr>
+
+<h2>1. Initializing W2 with a Small Scale</h2>
+
+<pre>
+W2 = torch.randn((n_hidden, vocab_size)) * 0.01
+</pre>
+
+<p>
+Instead of using the raw values produced by
+<code>torch.randn()</code>, every weight is multiplied by
+<code>0.01</code>.
+</p>
+
+<h3>Why?</h3>
+
+<p>
+The output logits are computed as:
+</p>
+
+<div class="math">
+logits = h @ W2 + b2
+</div>
+
+<p>
+If W2 contains large values, the logits can immediately become large.
+</p>
+
+<p>
+The softmax applies an exponential:
+</p>
+
+<div class="math">
+softmax(x) = exp(x) / Σ exp(x)
+</div>
+
+<p>
+The exponential amplifies differences.
+Large logits produce extremely confident probabilities even before learning.
+</p>
+
+<h3>Example</h3>
+
+<pre>
+Logits:
+
+[5.2, -2.8, 1.4]
+
+↓
+
+exp()
+
+[181, 0.06, 4.05]
+
+↓
+
+Softmax
+
+[0.978, 0.0003, 0.021]
+</pre>
+
+<p>
+The network is already almost certain about one class despite having learned nothing.
+This is undesirable.
+</p>
+
+<p>
+By multiplying W2 by 0.01, the logits remain close to zero.
+</p>
+
+<pre>
+Logits:
+
+[0.03, -0.02, 0.01]
+
+↓
+
+exp()
+
+[1.030, 0.980, 1.010]
+
+↓
+
+Softmax
+
+[0.34, 0.32, 0.34]
+</pre>
+
+<p>
+The initial probabilities become much more uniform.
+The network starts without any strong preference, which is a much healthier initialization.
+</p>
+
+<div class="note">
+
+<b>Important:</b>
+
+The multiplication by 0.01 does not change the fact that the weights follow a
+normal distribution.
+
+Instead of
+
+N(0,1)
+
+the weights now follow approximately
+
+N(0,0.01²)
+
+The distribution is simply much narrower around zero.
+
+</div>
+
+<hr>
+
+<h2>2. Tanh Saturation and the Vanishing Gradient</h2>
+
+<p>
+The hidden layer uses the tanh activation:
+</p>
+
+<pre>
+h = torch.tanh(...)
+</pre>
+
+<p>
+Its derivative is:
+</p>
+
+<div class="math">
+tanh'(x) = 1 − tanh²(x)
+</div>
+
+<p>
+If we denote
+</p>
+
+<div class="math">
+t = tanh(x)
+</div>
+
+<p>
+then
+</p>
+
+<div class="math">
+dt/dx = 1 − t²
+</div>
+
+<h3>What happens near ±1?</h3>
+
+<p>
+Suppose
+</p>
+
+<pre>
+tanh(x) = 0.999
+</pre>
+
+<p>
+Then
+</p>
+
+<div class="math">
+1 − 0.999² ≈ 0.002
+</div>
+
+<p>
+The derivative is almost zero.
+</p>
+
+<h3>Backpropagation</h3>
+
+<p>
+During backpropagation the chain rule multiplies gradients.
+</p>
+
+<pre>
+Incoming gradient
+
+1
+
+×
+
+Derivative of tanh
+
+0.002
+
+=
+
+Outgoing gradient
+
+0.002
+</pre>
+
+<p>
+Only a tiny gradient reaches the previous operations.
+</p>
+
+<p>
+The weights before tanh therefore receive almost no update:
+</p>
+
+<div class="math">
+W = W − learning_rate × gradient
+</div>
+
+<p>
+If the gradient is almost zero,
+the weight update is almost zero as well.
+</p>
+
+<div class="warning">
+
+This phenomenon is called <b>Vanishing Gradient</b>.
+
+As the gradient travels backward through the network,
+it becomes smaller and smaller,
+making earlier layers learn extremely slowly.
+
+</div>
+
+<h2>Why does initialization matter?</h2>
+
+<p>
+If the weights are initialized with very large values,
+the input of tanh becomes large as well.
+</p>
+
+<pre>
+x = 7
+
+↓
+
+tanh(x) ≈ 1
+
+↓
+
+Derivative ≈ 0
+</pre>
+
+<p>
+The neuron starts immediately in the saturated region.
+Learning becomes difficult from the very first iteration.
+</p>
+
+<p>
+A better initialization keeps the activations close to zero,
+where tanh behaves almost linearly.
+</p>
+
+<pre>
+x = 0
+
+↓
+
+tanh(0) = 0
+
+↓
+
+Derivative = 1
+</pre>
+
+<p>
+This allows gradients to flow much more easily through the network.
+</p>
+
+<hr>
+
+<h2>Key Takeaways</h2>
+
+<ul>
+
+<li>
+Initializing <code>W2</code> with <code>*0.01</code> keeps the initial logits small.
+</li>
+
+<li>
+Small logits produce nearly uniform probabilities.
+</li>
+
+<li>
+The derivative of tanh is <code>1 - tanh²(x)</code>.
+</li>
+
+<li>
+When tanh saturates near ±1, its derivative approaches zero.
+</li>
+
+<li>
+Very small derivatives produce the <b>Vanishing Gradient</b>.
+</li>
+
+<li>
+Good initialization helps keep neurons away from saturation during the first training iterations.
+</li>
+
+</ul>
+
+</body>
+</html>
