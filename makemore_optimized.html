@@ -53,6 +53,23 @@ pre{
     border-radius:8px;
     font-family:monospace;
 }
+
+table{
+    border-collapse:collapse;
+    width:100%;
+    margin:20px 0;
+}
+
+th,td{
+    border:1px solid #ccc;
+    padding:8px 12px;
+    text-align:left;
+}
+
+th{
+    background:#eef6fc;
+    color:#1f4e79;
+}
 </style>
 
 </head>
@@ -181,7 +198,86 @@ The distribution is simply much narrower around zero.
 
 <hr>
 
-<h2>2. Tanh Saturation and the Vanishing Gradient</h2>
+<h2>2. Tanh Compresses Activations: The Standard Deviation Problem</h2>
+
+<p>
+<code>tanh</code> causes two related problems, not just one. The vanishing
+gradient (below) is the second. This is the first, and it happens even
+before anything saturates.
+</p>
+
+<p>
+Every application of <code>tanh</code> squeezes values into the range
+<b>(-1, 1)</b>. That means it doesn't just reshape the data — it narrows
+its spread, i.e. its standard deviation.
+</p>
+
+<h3>Example</h3>
+
+<pre>
+Before tanh (std ≈ 1):
+
+-2.1
+-0.8
+ 0.3
+ 1.7
+
+↓ tanh
+
+After tanh:
+
+-0.97
+-0.66
+ 0.29
+ 0.94
+</pre>
+
+<p>
+The values are pulled inward. Do this once and it's minor. Do it layer
+after layer, and the effect compounds:
+</p>
+
+<pre>
+Layer 1 : std ≈ 1
+   ↓ tanh
+Layer 2 : std ≈ 0.7
+   ↓ tanh
+Layer 3 : std ≈ 0.5
+   ↓ tanh
+Layer 4 : std ≈ 0.3
+</pre>
+
+<p>
+Each layer's activations end up narrower than the layer before it. In a deep
+enough network, activations would shrink toward zero even if no single
+<code>tanh</code> call were anywhere near saturated.
+</p>
+
+<div class="note">
+<b>This is what the gain compensates for.</b>
+In an initialization like <code>torch.randn(...) * (5/3) / n**0.5</code>,
+the <b>5/3</b> is <code>tanh</code>'s specific correction factor. It slightly
+boosts the weight scale so that the shrinking effect of <code>tanh</code>
+is cancelled out — keeping the standard deviation of activations roughly
+constant from layer to layer instead of decaying.
+</div>
+
+<div class="note">
+<b>Why this barely shows up in our own network.</b>
+The layer-1-to-4 cascade above is illustrative of a <i>deep</i> network with
+several stacked <code>tanh</code> layers. Our Makemore MLP only has a single
+hidden layer — one <code>tanh</code> call between <code>W1</code> and
+<code>W2</code>. With just one layer, there's nothing to compound: getting
+the gain slightly wrong changes the scale of that one activation, but there's
+no repeated shrinking across depth to correct for. That's why tweaking the
+init here barely moves the loss — the effect becomes visible (and eventually
+critical) in networks with many stacked layers, where a small per-layer
+shrinkage compounds into a near-zero signal by the last layer.
+</div>
+
+<hr>
+
+<h2>3. Tanh Saturation and the Vanishing Gradient</h2>
 
 <p>
 The hidden layer uses the tanh activation:
@@ -335,6 +431,449 @@ This allows gradients to flow much more easily through the network.
 
 <hr>
 
+<h2>How the Two Problems Connect</h2>
+
+<p>
+These aren't two separate issues — they're the same root cause, seen at two
+different scales.
+</p>
+
+<p>
+If activations get too large, for example:
+</p>
+
+<pre>
+-8
+ 5
+12
+</pre>
+
+<p>
+then <code>tanh</code> pushes almost everything to the extremes:
+</p>
+
+<pre>
+-1
+ 1
+ 1
+</pre>
+
+<p>
+It's fully saturated. And once saturated, both problems show up at once:
+</p>
+
+<ul>
+<li>
+the activations are all pinned near ±1 — this <b>is</b> the standard
+deviation problem, taken to its extreme;
+</li>
+<li>
+the derivative is nearly 0 — this <b>is</b> the vanishing gradient.
+</li>
+</ul>
+
+<div class="note">
+<b>Controlling the variance of activations is what prevents tanh from
+saturating in the first place.</b>
+</div>
+
+<p>
+This is exactly why Karpathy spends so much effort on weight initialization:
+the goal is for activations, right from the first training step, to sit in
+the nearly-linear region of <code>tanh</code> around zero — not because
+that region is special in itself, but because staying there avoids both
+problems at once.
+</p>
+
+<div class="math">
+tanh's shrinking effect (problem 1)  →  pushes activations toward saturation
+saturation  →  derivative ≈ 0  →  vanishing gradient (problem 2)
+</div>
+
+<p>
+<b>In one sentence:</b> <code>tanh</code> compresses activations into
+(-1, 1), and if the inputs are too large it saturates — which sharply
+shrinks gradients and slows or blocks learning. Initialization techniques
+like Xavier/Kaiming, together with a tanh-specific gain like <b>5/3</b>,
+exist to keep activations in the range where <code>tanh</code> still works
+well.
+</p>
+
+<hr>
+
+<h2>4. Normalizing hpreact by Hand: A Preview of Batch Normalization</h2>
+
+<p>
+Initialization only controls the variance of activations <b>at the start</b>
+of training. Karpathy takes it one step further: he actively normalizes
+<code>hpreact</code> during the forward pass itself.
+</p>
+
+<h3>The shape of hpreact</h3>
+
+<pre>
+hpreact.shape = (batch_size, n_hidden)
+
+# e.g.
+hpreact.shape = (32, 200)
+</pre>
+
+<ul>
+<li><b>32 rows</b> → the 32 contexts (examples) in the mini-batch.</li>
+<li><b>200 columns</b> → the 200 hidden neurons.</li>
+</ul>
+
+<h3>A concrete example: one neuron, three contexts</h3>
+
+<table>
+<tr><th>Context</th><th>Neuron 1 activation</th></tr>
+<tr><td>"emma"</td><td>-2</td></tr>
+<tr><td>"john"</td><td>0</td></tr>
+<tr><td>"lucas"</td><td>2</td></tr>
+</table>
+
+<p>
+Neuron 1 produced <code>[-2, 0, 2]</code> across these 3 contexts. We compute:
+</p>
+
+<div class="math">
+mean:  μ = (-2 + 0 + 2) / 3 = 0
+std:   σ ≈ 2
+</div>
+
+<p>
+(more precisely, σ = √(8/3) ≈ 1.63 — the "≈ 2" above is a loose rounding
+for intuition, it doesn't change the reasoning below.)
+</p>
+
+<p>
+We then normalize <b>this neuron's outputs</b>, across the 3 contexts.
+</p>
+
+<h3>With two neurons: normalization works column by column</h3>
+
+<table>
+<tr><th>Context</th><th>Neuron 1</th><th>Neuron 2</th></tr>
+<tr><td>A</td><td>-2</td><td>50</td></tr>
+<tr><td>B</td><td>0</td><td>60</td></tr>
+<tr><td>C</td><td>2</td><td>70</td></tr>
+</table>
+
+<p>
+Batch normalization treats <b>each column independently</b>: the neuron 1
+column gets its own mean, std, and normalization; the neuron 2 column gets
+its own, separately. That's why Karpathy writes:
+</p>
+
+<pre>
+hpreact.mean(0)
+</pre>
+
+<p>
+Averaging over dimension 0 means averaging over the <b>batch</b> dimension
+(the rows) — independently, per column. Neurons are never compared against
+each other.
+</p>
+
+<h3>Why does Karpathy actually do this? The connection to tanh</h3>
+
+<p>
+<b>Without normalization</b> — suppose the raw pre-activations look like:
+</p>
+
+<pre>
+-15
+  8
+ 20
+-10
+ 13
+...
+</pre>
+
+<p>
+Applying <code>h = torch.tanh(hpreact)</code>:
+</p>
+
+<div class="math">
+tanh(-15) ≈ -1
+tanh(8)   ≈  1
+tanh(20)  ≈  1
+</div>
+
+<p>
+Almost every neuron comes out saturated at ±1, and the derivative
+<code>1 - tanh²(x)</code> collapses to nearly 0. Gradients vanish — same
+problem as sections 2–3, just triggered by the raw scale of the
+pre-activations instead of a bad initialization.
+</p>
+
+<p>
+<b>With normalization</b> — Karpathy does:
+</p>
+
+<pre>
+hpreact = (hpreact - mean) / std
+</pre>
+
+<p>
+The same raw values above might become something like:
+</p>
+
+<pre>
+-1.5
+ 0.3
+ 1.2
+-0.9
+ 0.8
+</pre>
+
+<p>
+Now:
+</p>
+
+<div class="math">
+tanh(-1.5) = -0.90
+tanh(0.3)  =  0.29
+tanh(1.2)  =  0.83
+</div>
+
+<p>
+Neurons are no longer all pinned to ±1. Their derivatives stay reasonably
+large, and gradients flow much better through the network.
+</p>
+
+<div class="note">
+<b>The goal here isn't "nicer statistics."</b> It's a concrete engineering
+target: keep activations out of tanh's saturation zone.
+</div>
+
+<h3>Why subtract the mean?</h3>
+
+<p>
+If a column is:
+</p>
+
+<pre>
+18
+19
+20
+21
+22
+</pre>
+
+<p>
+everything is strongly positive, and after <code>tanh</code> it all becomes:
+</p>
+
+<pre>
+1
+1
+1
+1
+1
+</pre>
+
+<p>
+Nothing learns anymore. Subtracting the mean re-centers it:
+</p>
+
+<pre>
+-2
+-1
+ 0
+ 1
+ 2
+</pre>
+
+<h3>Why divide by the standard deviation?</h3>
+
+<p>
+Take two neurons, both already centered on 0. The first produces
+<code>[-2, 0, 2]</code>; the second produces <code>[-200, 0, 200]</code>.
+Even though both are centered on 0, the second will fully saturate
+<code>tanh</code> regardless. Dividing by its own standard deviation:
+</p>
+
+<pre>
+-1
+ 0
+ 1
+</pre>
+
+<p>
+brings both neurons to a comparable scale.
+</p>
+
+<div class="note">
+<b>In one sentence:</b> the point of <code>hpreact = (hpreact - mean) / std</code>
+is to make sure every neuron sends <code>tanh</code> values centered around 0
+with a controlled spread (std ≈ 1), so <code>tanh</code> operates in its
+nearly-linear region, its derivative stays high, and gradients propagate
+efficiently during training. This hand-written normalization is exactly the
+idea that gives rise to <b>Batch Normalization</b>.
+</div>
+
+<h3>A surprising side effect: examples become coupled across the batch</h3>
+
+<p>
+Because normalization divides by <code>hpreact.mean(0)</code> and
+<code>hpreact.std(0)</code>, computed over the <b>whole mini-batch</b>, a
+given example's normalized activation is no longer a function of that
+example alone. It also depends on whichever other examples happen to share
+its batch on that particular step.
+</p>
+
+<p>
+Concretely: the exact same context can produce a slightly different
+<code>hpreact</code> depending on whether it lands in a batch where the
+other 31 examples happen to pull the batch's mean and std one way or
+another. Run the same input through the network twice, in two different
+batches, and the output can differ.
+</p>
+
+<div class="note">
+<b>Karpathy's point: it looks like a bug, but it acts as a regularizer.</b>
+Since each example's representation gets jittered depending on its random
+batch companions at every step, the network can't simply memorize a fixed
+output for a given input — it's forced to be somewhat robust to that
+jitter. This has the same flavor as other regularization techniques
+(dropout, data augmentation): injecting a bit of noise/entropy during
+training tends to reduce overfitting, as a side effect of something that
+was introduced to solve a completely different problem (saturation).
+</div>
+
+<div class="note">
+<b>One cause, not two.</b> Without batch normalization, an MLP processes
+every row of the batch completely independently — which other examples
+happen to sit next to it never affects its output. Shuffling the batch
+would change nothing for a given example. <b>It is specifically batch
+normalization</b> that opens the channel through which batch composition
+can affect an example's output, by folding <code>mean(0)</code>/
+<code>std(0)</code> over the whole batch into the computation. So the model
+can't behave like a giant fixed lookup table (same input → always the same
+output) — but the reason is BN, not "the batch" as some separate factor.
+<br><br>
+This is also only true <b>during training</b>, while <code>mean(0)</code>/
+<code>std(0)</code> are computed live on the current batch. Once
+<code>bnmean_running</code>/<code>bnstd_running</code> are used instead
+(fixed values, at eval/generation time), that channel closes and the
+network becomes a deterministic function of its input again — the only
+randomness left in the generation loop is <code>torch.multinomial</code>,
+which is an unrelated sampling step (picking the next character from the
+predicted probabilities), not an effect of batch normalization.
+</div>
+
+<h3>The catch: this breaks down at inference time</h3>
+
+<p>
+At generation time, examples are processed <b>one at a time</b>
+(batch size 1). Computing <code>hpreact.mean(0)</code> over a single
+example just returns that example itself — so subtracting the mean zeroes
+out every activation. And <code>hpreact.std(0)</code> over a single example
+is undefined: PyTorch's <code>.std()</code> divides by <code>n - 1</code>
+by default, so with <code>n = 1</code> that's a division by zero, giving
+<code>NaN</code>.
+</p>
+
+<div class="warning">
+This is exactly why Karpathy introduces <b>running estimates</b> of the
+mean and standard deviation (commonly named <code>bnmean_running</code> and
+<code>bnstd_running</code>), updated with a small momentum term after every
+training step. At test/generation time, the network uses these running
+statistics instead of recomputing batch statistics on the fly — sidestepping
+both the batch-size-1 crash above and the batch-coupling effect described
+in this section.
+</div>
+
+<h3>The concrete fix: running mean/std, replacing the on-the-fly stats</h3>
+
+<p>
+Three changes. Nothing about batch normalization itself changes — only
+where <code>mean</code>/<code>std</code> come from.
+</p>
+
+<p><b>1. Create two buffers once, before training</b> — not learned via
+backprop, just running records:</p>
+<pre>
+bnmean_running = torch.zeros((1, n_hidden))
+bnstd_running  = torch.ones((1, n_hidden))
+</pre>
+
+<p><b>2. During training</b>, after computing the batch's own mean/std to
+normalize <code>hpreact</code> as before, update the running buffers with a
+moving average:</p>
+<pre>
+bnmeani = hpreact.mean(0, keepdim=True)
+bnstdi  = hpreact.std(0, keepdim=True)
+hpreact = bngain * (hpreact - bnmeani) / bnstdi + bnbias
+
+with torch.no_grad():
+    bnmean_running = 0.999 * bnmean_running + 0.001 * bnmeani
+    bnstd_running  = 0.999 * bnstd_running  + 0.001 * bnstdi
+</pre>
+
+<p><b>3. In <code>split_loss</code> and in generation</b>, replace the
+on-the-fly statistics with the running ones:</p>
+<pre>
+# before
+h = bngain * (h - h.mean(0, keepdim=True)) / h.std(0, keepdim=True) + bnbias
+
+# after
+h = bngain * (h - bnmean_running) / bnstd_running + bnbias
+</pre>
+
+<div class="note">
+<b>Why this specifically fixes the NaN.</b> <code>h.std(0)</code> computes
+<code>Σ(xᵢ − μ)² / (n − 1)</code> on whatever tensor is currently in hand.
+At generation time, <code>h</code> has shape <code>(1, n_hidden)</code> —
+one row (one context), 200 columns (200 neurons), each column handled
+independently. For any single column, that's one value: the sum of
+squared deviations is always exactly 0 (a lone point never deviates from
+its own mean), and <code>n − 1 = 0</code>. <code>0 / 0</code> is
+undefined — PyTorch returns <code>NaN</code>, once per neuron, for all 200
+columns at once. <code>bnstd_running</code> never runs that formula on the
+current tensor at all — it's a number already computed and stored during
+training. Reading a stored constant can't divide by the current batch's
+<code>(n − 1)</code>, whatever that happens to be.
+</div>
+
+<h3>Why bnstd_running is a good stand-in for "the population"</h3>
+
+<p>
+A single batch's <code>bnstdi</code> is just an estimate — computed from
+32 randomly sampled contexts, it fluctuates from step to step purely from
+sampling noise, even though the true underlying spread of that neuron's
+activations across the whole dataset doesn't actually change that fast.
+</p>
+
+<div class="math">
+bnstd_running ← 0.999 · bnstd_running + 0.001 · bnstdi
+</div>
+
+<p>
+<code>bnstd_running</code> is an <b>exponential moving average</b> of
+thousands of these noisy per-batch estimates. Each update only nudges the
+running value 0.1% of the way toward the current batch's estimate.
+Averaged over thousands of steps, the batch-to-batch sampling noise
+cancels out (some batches overshoot, some undershoot, and it washes out),
+while the real signal — the neuron's actual typical spread, which changes
+slowly as <code>W1</code>/<code>b1</code> converge — survives and
+accumulates. What's left is a stable estimate of the <b>population</b>
+statistic: roughly what this neuron's standard deviation would be if you
+computed it over the entire training set at once, instead of one noisy
+batch at a time.
+</p>
+
+<div class="note">
+That's exactly why it works at inference: <code>bnstd_running</code>
+doesn't need any examples in the current forward pass to be meaningful —
+it was never describing "this batch" to begin with, it already describes
+the dataset as a whole. A batch of size 1 (or of 10,000) is irrelevant to
+it, because it was never derived from the current batch in the first place.
+</div>
+
+<hr>
+
 <h2>Key Takeaways</h2>
 
 <ul>
@@ -345,6 +884,16 @@ Initializing <code>W2</code> with <code>*0.01</code> keeps the initial logits sm
 
 <li>
 Small logits produce nearly uniform probabilities.
+</li>
+
+<li>
+Every application of <code>tanh</code> shrinks the standard deviation of
+activations, even before anything saturates — and this compounds across layers.
+</li>
+
+<li>
+The <code>5/3</code> gain used in tanh-based initialization exists specifically
+to counteract this shrinking.
 </li>
 
 <li>
@@ -361,6 +910,25 @@ Very small derivatives produce the <b>Vanishing Gradient</b>.
 
 <li>
 Good initialization helps keep neurons away from saturation during the first training iterations.
+</li>
+
+<li>
+Normalizing <code>hpreact</code> per neuron (<code>hpreact.mean(0)</code>,
+column by column) keeps activations centered and at a controlled scale
+throughout training, not just at initialization.
+</li>
+
+<li>
+This hand-written <code>(hpreact - mean) / std</code> step is the direct
+ancestor of <b>Batch Normalization</b>.
+</li>
+
+<li>
+Because the mean/std are computed over the whole batch, examples get
+coupled together — the same input can produce a slightly different
+activation depending on its batch companions. This acts as an (accidental)
+regularizer during training, but breaks at batch-size-1 inference, which is
+why running mean/std estimates are needed at test/generation time.
 </li>
 
 </ul>

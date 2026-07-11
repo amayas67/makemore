@@ -31,7 +31,6 @@ def build_dataset(words, block_size):
     return torch.tensor(X), torch.tensor(Y)
 
 
-X, Y = build_dataset(words, block_size)
 
 import random 
 
