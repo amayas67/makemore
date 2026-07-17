@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import random
 
 # ============================================================
-# Load data
+# Load data 
 # ============================================================
 words = open('data/name.txt', 'r').read().splitlines()
 print(f"First 10 names: {words[:10]}")
@@ -14,7 +14,7 @@ chars = sorted(list(set(''.join(words))))
 chars = ['.'] + chars  # '.' represents start/end token
 stoi = {ch: i for i, ch in enumerate(chars)}
 itos = {i: ch for ch, i in stoi.items()}
-vocab_size = len(chars)  # plus de "27" en dur
+vocab_size = len(chars)  # no more hardcoded "27"
 block_size = 3  # context length
 
 # ============================================================
@@ -67,7 +67,7 @@ print(sum(p.nelement() for p in parameters))  # number of parameters in total
 for p in parameters:
     p.requires_grad = True
 
-# Hyperparamètres d'entraînement (plus de magic numbers non plus)
+# Training hyperparameters (no more magic numbers either)
 lr         = 0.1
 max_steps  = 100000
 batch_size = 32
@@ -119,7 +119,7 @@ print("Training complete.")
 plt.plot(lossi)
 
 # ============================================================
-# Evaluate loss on a split (factorisé, plus de duplication)
+# Evaluate loss on a split (factored, no more duplication)
 # ============================================================
 @torch.no_grad()
 def split_loss(X, Y):
@@ -138,7 +138,7 @@ print(f"Test Loss:  {split_loss(Xte, Yte):.4f}")
 # ============================================================
 # Generate new names
 # ============================================================
-# Ensemble de tous les mots du dataset pour vérification O(1)
+# Set of all words in the dataset for O(1) lookup
 words_set = set(words)
 
 print("Generating new names:")
@@ -162,5 +162,5 @@ for _ in range(num_samples):
         out.append(ix)
 
     generated_name = ''.join(itos[i] for i in out)
-    in_dataset = "Oui" if generated_name in words_set else "Non"
-    print(f"{generated_name:15s} | Dans le dataset : {in_dataset}")
+    in_dataset = "Yes" if generated_name in words_set else "No"
+    print(f"{generated_name:15s} | In dataset: {in_dataset}")
