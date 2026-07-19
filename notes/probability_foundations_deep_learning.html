@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Probability Foundations for Deep Learning</title>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] } };
+</script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #EEF1F5;
+    --surface: #FFFFFF;
+    --ink: #1A1D23;
+    --ink-soft: #5B6270;
+    --accent: #38469C;
+    --accent-soft: #E4E7F5;
+    --amber: #A9701F;
+    --amber-soft: #F5EBDA;
+    --code-bg: #1C2333;
+    --code-text: #D7E3F4;
+    --rule: #D6DAE2;
+    --good: #2F7A54;
+    --good-soft: #E4F3EA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  header.title-block {
+    margin-bottom: 40px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: Georgia, "Iowan Old Style", serif;
+    font-size: 34px;
+    margin: 0 0 12px;
+    line-height: 1.2;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 15.5px; max-width: 60ch; }
+
+  .cell {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 26px 28px;
+    margin-bottom: 22px;
+    position: relative;
+  }
+  .cell-number {
+    position: absolute;
+    top: -13px;
+    left: 22px;
+    background: var(--ink);
+    color: #fff;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+  }
+  .q {
+    font-family: Georgia, serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 6px 0 12px;
+  }
+  .a p { margin: 0 0 12px; }
+  .a p:last-child { margin-bottom: 0; }
+
+  .formula {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+
+  .callout {
+    background: var(--amber-soft);
+    border-left: 3px solid var(--amber);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    font-size: 14.5px;
+  }
+  .callout .label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--amber);
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+  .callout.info { background: var(--accent-soft); border-left-color: var(--accent); }
+  .callout.info .label { color: var(--accent); }
+
+  .a ol { margin: 0 0 14px; padding-left: 22px; }
+  .a ol li { margin-bottom: 8px; }
+  .a ol li:last-child { margin-bottom: 0; }
+
+  .calc {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 14px 0;
+  }
+  .calc .step-label {
+    color: var(--ink-soft);
+    display: block;
+    margin: 10px 0 2px;
+  }
+  .calc .step-label:first-child { margin-top: 0; }
+
+  pre.code {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 14px 16px;
+    border-radius: 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    overflow-x: auto;
+    margin: 14px 0;
+  }
+  .code-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: -6px;
+    display: block;
+  }
+
+  .demo {
+    margin-top: 16px;
+    border-top: 1px dashed var(--rule);
+    padding-top: 16px;
+  }
+  .demo-title {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+
+  .hist-row { display: flex; gap: 24px; }
+  .hist { flex: 1; }
+  .hist-label { font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; text-align: center; }
+  .hist-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 110px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
+
+  .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+  .bar-row .n-label { width: 60px; font-family: ui-monospace, monospace; color: var(--ink-soft); flex-shrink: 0; }
+  .bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 18px; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .bar-fill.raw { background: #C46A6A; }
+  .bar-fill.norm { background: var(--good); }
+  .bar-value { font-family: ui-monospace, monospace; font-size: 12px; width: 48px; text-align: right; flex-shrink: 0; }
+
+  .legend { display: flex; gap: 18px; font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  footer {
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="title-block">
+    <p class="eyebrow">Study notes — probability &amp; deep learning</p>
+    <h1>Probability Foundations for Deep Learning</h1>
+    <p class="subtitle">Nine building blocks, in dependency order, that explain why <code>torch.randn</code>,
+    the <code>× 0.01</code> scaling, and the Xavier/Kaiming <code>÷ √n</code> rule in the MLP init code
+    are not arbitrary — each one follows from the one before it.</p>
+  </header>
+
+  <!-- 1 -->
+  <div class="cell">
+    <div class="cell-number">01</div>
+    <p class="q">What is a random variable?</p>
+    <div class="a">
+      <p>A random variable is just a variable whose value comes from a random experiment, together with
+      the information of how likely each outcome is. It is not mysterious — it is a number you don't know
+      yet, but whose possible values and odds you <em>do</em> know.</p>
+      <p class="code-label">example</p>
+      <pre class="code">torch.randint(1, 7, (1,))  # one value in {1, ..., 6}, all equally likely</pre>
+      <div class="callout">
+        <span class="label">a bit more formally</span>
+        A random variable is a function \(X\) that assigns a number to each outcome of an experiment.
+        The die roll is the experiment; \(X\) reads off which face landed. What makes it "random" is not
+        the function — it's that the input (which face lands) is not fixed in advance.
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="cell">
+    <div class="cell-number">02</div>
+    <p class="q">What is a distribution?</p>
+    <div class="a">
+      <p>A distribution answers: <em>with what probability does each value occur?</em> For a die, it's
+      the list of six probabilities. Below are 1000 simulated die rolls, binned — this is what a
+      distribution looks like when you actually sample it instead of assuming it.</p>
+      <div class="demo">
+        <div class="demo-title">live sample — 1000 die rolls</div>
+        <div class="hist-bars" id="hist-die" style="height:90px;"></div>
+      </div>
+      <div class="callout">
+        <span class="label">continuous case, one subtlety</span>
+        For a continuous variable (like the normal distribution below), asking "what's the probability
+        of exactly 0.532871…" gives zero — there are infinitely many possible values. What we describe
+        instead is a <em>density</em>: probability is the area under the curve over an interval, not the
+        height at a point. This matters later — it's why the normal "distribution" is written as a
+        formula for a curve, not a table of probabilities.
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="cell">
+    <div class="cell-number">03</div>
+    <p class="q">What is the uniform distribution?</p>
+    <div class="a">
+      <p>The distribution where every outcome is equally likely. The die above is the discrete case.
+      A continuous uniform variable — e.g. <code>torch.rand(...)</code> — picks any real number in
+      \([0,1)\) with equal density everywhere in that range. It's the "flattest" distribution: no value
+      is favored over another.</p>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="cell">
+    <div class="cell-number">04</div>
+    <p class="q">What is the normal distribution?</p>
+    <div class="a">
+      <p>A specific, non-uniform distribution: values near the center are common, values far from the
+      center are rare, and the rate of drop-off is smooth and symmetric.</p>
+      <div class="formula">
+        \[ f(x) = \frac{1}{\sigma\sqrt{2\pi}} \, e^{-\frac{(x-\mu)^2}{2\sigma^2}} \]
+      </div>
+      <p>You can set this formula aside at first — the important content is the shape. Below is a live
+      histogram of 5000 samples drawn from a standard normal:</p>
+      <div class="demo">
+        <div class="demo-title">live sample — \(\mathcal{N}(0,1)\), 5000 draws</div>
+        <div class="hist-bars" id="hist-normal" style="height:110px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="cell">
+    <div class="cell-number">05</div>
+    <p class="q">What is the mean?</p>
+    <div class="a">
+      <p>The center of the distribution — the value the data balances around. For <code>torch.randn</code>,
+      \(\mu = 0\): values are just as likely to land above 0 as below it.</p>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="cell">
+    <div class="cell-number">06</div>
+    <p class="q">What are variance and standard deviation?</p>
+    <div class="a">
+      <p>Both measure spread around the mean, but they're not interchangeable:</p>
+      <div class="formula">
+        \[ \text{Var}(X) = E[(X-\mu)^2] \qquad \sigma = \sqrt{\text{Var}(X)} \]
+      </div>
+      <p>Variance is in <em>squared</em> units (if \(X\) is in meters, \(\text{Var}(X)\) is in meters²) —
+      that's a mathematical convenience for the algebra in section 9, but it's not directly interpretable
+      as "distance from the mean." Standard deviation, the square root, brings it back to the original
+      units, which is why it's the one people picture as "typical spread."</p>
+
+      <p><b>Computing it by hand, step by step:</b></p>
+      <ol>
+        <li>Compute the <b>mean</b> of the values.</li>
+        <li>Subtract the mean from every value — this gives how far each one sits from the center.</li>
+        <li>Square every difference. Squaring stops positive and negative differences from cancelling
+        out, and it punishes large deviations more than small ones.</li>
+        <li>Average these squared differences. That average is the <b>variance</b>.</li>
+      </ol>
+      <div class="calc">
+        <span class="step-label">values</span>
+        2, 4, 6
+        <span class="step-label">1. mean</span>
+        μ = (2 + 4 + 6) / 3 = 4
+        <span class="step-label">2. differences from the mean</span>
+        2 − 4 = −2 &nbsp;&nbsp; 4 − 4 = 0 &nbsp;&nbsp; 6 − 4 = 2
+        <span class="step-label">3. squared differences</span>
+        (−2)² = 4 &nbsp;&nbsp; 0² = 0 &nbsp;&nbsp; 2² = 4
+        <span class="step-label">4. variance = average of the squared differences</span>
+        (4 + 0 + 4) / 3 = 2.67
+      </div>
+      <div class="callout info">
+        <span class="label">important</span>
+        Variance is <b>not</b> the average distance from the mean — it's the average of the
+        <b>squared</b> distances. That gap between "distance" and "squared distance" is exactly why a
+        square root shows up next, to bring things back to a number you can picture directly.
+      </div>
+      <p>And concretely, taking that square root: if \(\text{Var}(X) = 9\), then \(\sigma = \sqrt{9} = 3\)
+      — values are typically about <b>3 units</b> from the mean. Same information, just back in the
+      original unit instead of squared units.</p>
+      <p>Same sample size, two different \(\sigma\) — notice how much more the wide one spills into the tails:</p>
+      <div class="demo">
+        <div class="hist-row">
+          <div class="hist">
+            <div class="hist-label">σ = 0.4 (small spread)</div>
+            <div class="hist-bars" id="hist-small-sigma"></div>
+          </div>
+          <div class="hist">
+            <div class="hist-label">σ = 2.0 (large spread)</div>
+            <div class="hist-bars" id="hist-large-sigma"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="cell">
+    <div class="cell-number">07</div>
+    <p class="q">What does <code>torch.randn</code> actually do?</p>
+    <div class="a">
+      <p>It draws samples from \(\mathcal{N}(0,1)\): mean 0, standard deviation 1. Nothing more exotic
+      than that — it's literally sampling the curve from section 4.</p>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="cell">
+    <div class="cell-number">08</div>
+    <p class="q">Why multiply by 0.01, like in <code>W2 = torch.randn(...) * 0.01</code>?</p>
+    <div class="a">
+      <p>Scaling a random variable by a constant \(c\) scales its standard deviation by \(c\) and its
+      variance by \(c^2\):</p>
+      <div class="formula">
+        \[ \text{if } X \sim \mathcal{N}(\mu, \sigma^2), \text{ then } cX \sim \mathcal{N}(c\mu,\, c^2\sigma^2) \]
+      </div>
+      <p>So <code>randn(...) * 0.01</code> keeps the shape (still normal, still centered at 0) but
+      squeezes it: \(\mathcal{N}(0,1) \rightarrow \mathcal{N}(0, 0.01^2)\). Every sample lands about 100×
+      closer to 0 than before. This is used for <code>W2</code> specifically so that the initial logits
+      are small — large random logits at step 0 make the initial loss unnecessarily high and the first
+      gradients noisy.</p>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="cell">
+    <div class="cell-number">09</div>
+    <p class="q">Why divide by \(\sqrt{n}\)? (Xavier / Kaiming initialization)</p>
+    <div class="a">
+      <p>This part is a consequence of linear algebra and how variance behaves under sums — not
+      probability theory in the same sense as sections 1–8.</p>
+      <p>A neuron's pre-activation is a weighted sum:</p>
+      <div class="formula">
+        \[ z = x_1 w_1 + x_2 w_2 + \cdots + x_n w_n \]
+      </div>
+      <div class="callout">
+        <span class="label">the step the original plan skipped</span>
+        The claim "more terms → more variance, roughly as \(n\)" is true, but it needs one more building
+        block to actually derive: <strong>the variance of a product of two independent, zero-mean
+        variables is the product of their variances.</strong> If \(x_i\) and \(w_i\) are independent with
+        \(E[x_i]=E[w_i]=0\), \(\text{Var}(x_i) = \sigma_x^2\), \(\text{Var}(w_i)=\sigma_w^2\), then:
+        \[ \text{Var}(x_i w_i) = \sigma_x^2 \sigma_w^2 \]
+        This is the missing link between "products of random things" and "sums of variances" — without
+        it, the \(n \cdot \sigma_x^2\sigma_w^2\) step is asserted rather than derived.
+      </div>
+      <p>Now sum \(n\) such independent terms — variances of independent variables add:</p>
+      <div class="formula">
+        \[ \text{Var}(z) = \sum_{i=1}^n \text{Var}(x_i w_i) = n\,\sigma_x^2\sigma_w^2
+        \quad\Rightarrow\quad \sigma_z = \sigma_x\,\sigma_w\sqrt{n} \]
+      </div>
+      <p>The standard deviation of the neuron's output grows with \(\sqrt{n}\) purely because you're
+      adding up more independent terms — regardless of what distribution \(x\) and \(w\) individually
+      follow. To keep \(\sigma_z \approx \sigma_x\) (the signal doesn't blow up or shrink as it passes
+      through the layer), you need \(\sigma_w \sqrt{n} \approx 1\), i.e.:</p>
+      <div class="formula">
+        \[ \sigma_w \approx \frac{1}{\sqrt{n}} \]
+      </div>
+      <p>which is exactly why weights are initialized as <code>torch.randn(...) / sqrt(n)</code>
+      (Xavier/Glorot) or <code>* sqrt(2/n)</code> (Kaiming/He — the extra factor of 2 corrects for ReLU
+      discarding half the signal, which doesn't apply to your <code>tanh</code> layer).</p>
+      <p>Below: standard deviation of the sum of \(n\) independent \(\mathcal{N}(0,1)\) terms, with and
+      without dividing by \(\sqrt{n}\) — computed live, not asserted.</p>
+      <div class="demo">
+        <div class="demo-title">live sample — 3000 trials per n</div>
+        <div id="sqrtn-bars"></div>
+        <div class="legend">
+          <span><span class="swatch" style="background:#C46A6A;"></span> raw sum (grows with n)</span>
+          <span><span class="swatch" style="background:var(--good);"></span> divided by √n (stays ≈ 1)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Section 9 correction: the "sum of n terms → variance ~n" step requires <em>independence</em> between
+    \(x_i\) and \(w_i\) and across different \(i\) — worth flagging explicitly since it's the part that
+    actually turns the earlier plan's intuition into a derivation.
+  </footer>
+
+</div>
+
+<script>
+function gaussianRandom(mean, std) {
+  mean = mean || 0; std = std === undefined ? 1 : std;
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function histogram(samples, min, max, bins) {
+  const counts = new Array(bins).fill(0);
+  const width = (max - min) / bins;
+  for (const s of samples) {
+    let idx = Math.floor((s - min) / width);
+    if (idx < 0) idx = 0;
+    if (idx >= bins) idx = bins - 1;
+    counts[idx]++;
+  }
+  return counts;
+}
+
+function renderHistogram(elementId, counts) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const maxCount = Math.max(...counts);
+  el.innerHTML = counts.map(c => {
+    const h = maxCount === 0 ? 1 : Math.max(1, Math.round((c / maxCount) * 100));
+    return `<div class="bar" style="height:${h}%"></div>`;
+  }).join('');
+}
+
+function stdOfSum(n, trials, normalize) {
+  let sums = [];
+  for (let t = 0; t < trials; t++) {
+    let s = 0;
+    for (let i = 0; i < n; i++) s += gaussianRandom();
+    if (normalize) s = s / Math.sqrt(n);
+    sums.push(s);
+  }
+  const mean = sums.reduce((a, b) => a + b, 0) / sums.length;
+  const variance = sums.reduce((a, b) => a + (b - mean) * (b - mean), 0) / sums.length;
+  return Math.sqrt(variance);
+}
+
+window.addEventListener('load', () => {
+  // Section 2: die rolls
+  const dieRolls = Array.from({length: 1000}, () => Math.floor(Math.random() * 6) + 1);
+  const dieCounts = [1,2,3,4,5,6].map(f => dieRolls.filter(r => r === f).length);
+  renderHistogram('hist-die', dieCounts);
+
+  // Section 4: standard normal
+  const normalSamples = Array.from({length: 5000}, () => gaussianRandom(0, 1));
+  renderHistogram('hist-normal', histogram(normalSamples, -4, 4, 28));
+
+  // Section 6: small vs large sigma
+  const smallSigma = Array.from({length: 4000}, () => gaussianRandom(0, 0.4));
+  const largeSigma = Array.from({length: 4000}, () => gaussianRandom(0, 2.0));
+  renderHistogram('hist-small-sigma', histogram(smallSigma, -6, 6, 24));
+  renderHistogram('hist-large-sigma', histogram(largeSigma, -6, 6, 24));
+
+  // Section 9: sqrt(n) demo
+  const ns = [1, 5, 20, 100, 500];
+  const results = ns.map(n => ({
+    n,
+    raw: stdOfSum(n, 3000, false),
+    norm: stdOfSum(n, 3000, true)
+  }));
+  const maxRaw = Math.max(...results.map(r => r.raw));
+  const container = document.getElementById('sqrtn-bars');
+  container.innerHTML = results.map(r => `
+    <div class="bar-row">
+      <span class="n-label">n=${r.n}</span>
+      <div class="bar-track"><div class="bar-fill raw" style="width:${(r.raw / maxRaw * 100).toFixed(1)}%"></div></div>
+      <span class="bar-value">${r.raw.toFixed(2)}</span>
+    </div>
+    <div class="bar-row">
+      <span class="n-label"></span>
+      <div class="bar-track"><div class="bar-fill norm" style="width:${(r.norm / maxRaw * 100).toFixed(1)}%"></div></div>
+      <span class="bar-value">${r.norm.toFixed(2)}</span>
+    </div>
+  `).join('');
+});
+</script>
+</body>
+</html>
